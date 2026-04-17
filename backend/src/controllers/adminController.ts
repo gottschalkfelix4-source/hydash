@@ -58,6 +58,66 @@ export async function deleteUser(req: Request, res: Response): Promise<void> {
   }
 }
 
+export async function createUser(req: Request, res: Response): Promise<void> {
+  try {
+    const { email, password, displayName, roleIds } = req.body;
+    if (!email || !password) {
+      res.status(400).json({ success: false, error: 'Email and password are required' });
+      return;
+    }
+    if (password.length < 8) {
+      res.status(400).json({ success: false, error: 'Password must be at least 8 characters' });
+      return;
+    }
+    const user = await rbacService.createUserByAdmin(email, password, displayName, roleIds);
+    res.status(201).json({ success: true, data: user });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Email already registered') {
+      res.status(409).json({ success: false, error: error.message });
+      return;
+    }
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+export async function updateUser(req: Request, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { displayName, email } = req.body;
+    const user = await rbacService.updateUser(id, { displayName, email });
+    if (!user) {
+      res.status(404).json({ success: false, error: 'User not found' });
+      return;
+    }
+    res.json({ success: true, data: user });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Email already in use') {
+      res.status(409).json({ success: false, error: error.message });
+      return;
+    }
+    if (error instanceof Error) {
+      res.status(400).json({ success: false, error: error.message });
+      return;
+    }
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+export async function resetPassword(req: Request, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { password } = req.body;
+    if (!password || password.length < 8) {
+      res.status(400).json({ success: false, error: 'Password must be at least 8 characters' });
+      return;
+    }
+    await rbacService.resetUserPassword(id, password);
+    res.json({ success: true, message: 'Password reset successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
 // ============================================
 // Roles
 // ============================================

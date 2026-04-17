@@ -196,6 +196,44 @@ export async function generateApiKey(userId: string): Promise<string> {
 }
 
 /**
+ * Update own profile (displayName)
+ */
+export async function updateProfile(userId: string, displayName: string) {
+  await query(
+    'UPDATE users SET display_name = $1 WHERE id = $2',
+    [displayName, userId]
+  );
+
+  return getMe(userId);
+}
+
+/**
+ * Change own password (requires current password verification)
+ */
+export async function changePassword(userId: string, currentPassword: string, newPassword: string) {
+  const user = await getOne<UserRow>(
+    'SELECT id, password_hash FROM users WHERE id = $1',
+    [userId]
+  );
+
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  const validPassword = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!validPassword) {
+    throw new Error('Current password is incorrect');
+  }
+
+  if (newPassword.length < 8) {
+    throw new Error('New password must be at least 8 characters');
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  await query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, userId]);
+}
+
+/**
  * Get user roles and permissions
  */
 async function getUserRolesAndPermissions(userId: string): Promise<RolePermissionRow> {

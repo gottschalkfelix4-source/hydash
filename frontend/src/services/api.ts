@@ -54,6 +54,10 @@ export const authApi = {
     api.post('/auth/refresh', { refreshToken }),
   me: () => api.get('/auth/me'),
   generateApiKey: () => api.post('/auth/api-key'),
+  updateProfile: (data: { displayName: string }) =>
+    api.put('/auth/me/profile', data),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    api.put('/auth/me/password', { currentPassword, newPassword }),
 };
 
 // ============================================
@@ -185,8 +189,14 @@ export const settingsApi = {
 export const adminApi = {
   listUsers: () => api.get('/admin/users'),
   getUser: (id: string) => api.get(`/admin/users/${id}`),
+  createUser: (data: { email: string; password: string; displayName?: string; roleIds?: string[] }) =>
+    api.post('/admin/users', data),
+  updateUser: (id: string, data: { displayName?: string; email?: string }) =>
+    api.patch(`/admin/users/${id}`, data),
   setUserActive: (id: string, isActive: boolean) =>
     api.patch(`/admin/users/${id}/active`, { isActive }),
+  resetPassword: (id: string, password: string) =>
+    api.post(`/admin/users/${id}/reset-password`, { password }),
   deleteUser: (id: string) => api.delete(`/admin/users/${id}`),
   listRoles: () => api.get('/admin/roles'),
   createRole: (data: Record<string, unknown>) => api.post('/admin/roles', data),

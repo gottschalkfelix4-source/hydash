@@ -1,3 +1,4 @@
+import bcrypt from 'bcryptjs';
 import { query, getOne, getMany } from '../models/db';
 import { Role, Permission } from '../types';
 
@@ -175,4 +176,112 @@ export async function setUserActive(userId: string, isActive: boolean): Promise<
  */
 export async function deleteUser(userId: string): Promise<void> {
   await query('DELETE FROM users WHERE id = $1', [userId]);
+}
+
+/**
+ * Create a user by admin (with specific role assignment)
+ */
+export async function createUserByAdmin(
+  email: string,
+  password: string,
+  displayName?: string,
+  roleIds?: string[]
+) {
+  // Check if email already exists
+  const existing = await getOne<{ id: string }>(
+    'SELECT id FROM users WHERE email = $1',
+    [email]
+  );
+  if (existing) {
+    throw new Error('Email already registered');
+  }
+
+  // Hash password
+  const passwordHash = await bcrypt.hash(password, 12);
+
+  // Create user
+  const result = await query<{
+    id: string; email: string; displayName: string | null; isActive: boolean; createdAt: Date;
+  }>(
+    `INSERT INTO users (email, password_hash, display_name)
+     VALUES ($1, $2, $3)
+     RETURNING id, email, display_name as "displayName", is_active as "isActive", created_at as "createdAt"`,
+    [email, passwordHash, displayName || null]
+  );
+
+  const user = result.rows[0];
+
+  // Assign specified roles (or default 'viewer' if none given)
+  if (roleIds && roleIds.length > 0) {
+    for (const roleId of roleIds) {
+      await query(
+        'INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [user.id, roleId]
+      );
+    }
+  } else {
+    await query(
+      `INSERT INTO user_roles (user_id, role_id)
+       SELECT $1, id FROM roles WHERE name = 'viewer'`,
+      [user.id]
+    );
+  }
+
+  // Fetch the user with roles
+  const users = await getUsers();
+  return users.find(u => u.id === user.id);
+}
+
+/**
+ * Update a user's profile (displayName, email)
+ */
+export async function updateUser(
+  userId: string,
+  updates: { displayName?: string; email?: string }
+) {
+  // If email is changing, check uniqueness
+  if (updates.email) {
+    const existing = await getOne<{ id: string }>(
+      'SELECT id FROM users WHERE email = $1 AND id != $2',
+      [updates.email, userId]
+    );
+    if (existing) {
+      throw new Error('Email already in use');
+    }
+  }
+
+  const setClauses: string[] = [];
+  const params: unknown[] = [];
+  let paramIndex = 1;
+
+  if (updates.displayName !== undefined) {
+    setClauses.push(`display_name = $${paramIndex++}`);
+    params.push(updates.displayName);
+  }
+  if (updates.email !== undefined) {
+    setClauses.push(`email = $${paramIndex++}`);
+    params.push(updates.email);
+  }
+
+  if (setClauses.length === 0) {
+    throw new Error('No fields to update');
+  }
+
+  params.push(userId);
+  await query(
+    `UPDATE users SET ${setClauses.join(', ')} WHERE id = $${paramIndex}`,
+    params
+  );
+
+  // Return updated user with roles
+  const users = await getUsers();
+  return users.find(u => u.id === userId);
+}
+
+/**
+ * Reset a user's password (admin action, no old password needed)
+ */
+export async function resetUserPassword(userId: string, newPassword: string): Promise<void> {
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  await query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, userId]);
 }

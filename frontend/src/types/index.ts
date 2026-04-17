@@ -8,6 +8,8 @@ export interface User {
   displayName: string | null;
   roles: string[];
   permissions: string[];
+  isActive: boolean;
+  createdAt: string;
 }
 
 export interface Server {

@@ -9,8 +9,11 @@ router.use(requireAuth, requirePermission('user.manage'));
 
 // Users
 router.get('/users', adminController.listUsers);
+router.post('/users', adminController.createUser);
 router.get('/users/:id', adminController.getUser);
+router.patch('/users/:id', adminController.updateUser);
 router.patch('/users/:id/active', adminController.setUserActive);
+router.post('/users/:id/reset-password', adminController.resetPassword);
 router.delete('/users/:id', adminController.deleteUser);
 
 // Roles
