@@ -1,0 +1,88 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: hydash-postgres
+    environment:
+      POSTGRES_DB: hydash
+      POSTGRES_USER: hydash
+      POSTGRES_PASSWORD: hydash
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U hydash']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hydash-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: hydash-redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hydash-net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: hydash-api
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql://hydash:hydash@postgres:5432/hydash
+      - REDIS_URL=redis://redis:6379
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=hydash
+      - DB_USER=hydash
+      - DB_PASSWORD=hydash
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    ports:
+      - '3001:3001'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - hydash_servers:/var/hydash/servers
+      - hydash_backups:/var/hydash/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - hydash-net
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: hydash-web
+    ports:
+      - '80:80'
+    depends_on:
+      - backend
+    networks:
+      - hydash-net
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
+  hydash_servers:
+  hydash_backups:
+
+networks:
+  hydash-net:
+    driver: bridge

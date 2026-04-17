@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --hydash-primary: #5c7cfa;
+  --hydash-primary-dark: #4263eb;
+  --hydash-success: #51cf66;
+  --hydash-warning: #fcc419;
+  --hydash-danger: #ff6b6b;
+  --hydash-info: #22b8cf;
+}
+
+body {
+  @apply bg-gray-900 text-gray-100 font-sans;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-gray-800;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-600 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-500;
+}
+
+/* Console styles */
+.console-output {
+  @apply font-mono text-sm leading-relaxed;
+}
+.console-output .log-info { @apply text-gray-200; }
+.console-output .log-warn { @apply text-yellow-400; }
+.console-output .log-error { @apply text-red-400; }
+.console-output .log-debug { @apply text-gray-500; }
+
+/* Status badges */
+.status-running { @apply bg-green-500/20 text-green-400 border-green-500/30; }
+.status-starting { @apply bg-yellow-500/20 text-yellow-400 border-yellow-500/30; }
+.status-stopped { @apply bg-gray-500/20 text-gray-400 border-gray-500/30; }
+.status-error { @apply bg-red-500/20 text-red-400 border-red-500/30; }
+.status-creating { @apply bg-blue-500/20 text-blue-400 border-blue-500/30; }
+
+/* Pulsing dot for running status */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* Metric card gradient */
+.metric-card {
+  @apply bg-gray-800 rounded-lg border border-gray-700 p-4;
+  background: linear-gradient(135deg, rgba(17, 24, 39, 0.9), rgba(31, 41, 55, 0.9));
+}

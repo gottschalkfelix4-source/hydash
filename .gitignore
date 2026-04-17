@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Build output
+dist/
+*/dist/
+build/
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Data directories
+backups/
+servers/
+*.log
+
+# Docker volumes
+.postgres-data/
+.redis-data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test
+coverage/
+.nyc_output/
+
+# Temporary
+*.tmp
+*.bak
+
+# Claude Code plans
+.claude/
