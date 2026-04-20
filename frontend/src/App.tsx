@@ -39,6 +39,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="/servers" element={<Navigate to="/" replace />} />
           <Route
             path="/servers/:id"
             element={
