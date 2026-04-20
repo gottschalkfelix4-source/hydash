@@ -11,6 +11,9 @@ export interface CreateContainerOptions {
   jvmArgs?: string;
   serverArgs?: string;
   serverId: string;
+  sessionToken?: string;
+  identityToken?: string;
+  ownerUuid?: string;
 }
 
 class DockerManager {
@@ -26,6 +29,9 @@ class DockerManager {
       jvmArgs,
       serverArgs,
       serverId,
+      sessionToken,
+      identityToken,
+      ownerUuid,
     } = options;
 
     const containerName = `hydash-${name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
@@ -36,13 +42,27 @@ class DockerManager {
 
     logger.info(`Creating container: ${containerName}`);
 
+    // Build server args with optional session tokens for authenticated servers
+    let fullServerArgs = serverArgs || '--assets ../Assets.zip --backup --backup-dir backups --backup-frequency 30';
+    if (sessionToken) {
+      fullServerArgs += ` --session-token "${sessionToken}"`;
+    }
+    if (identityToken) {
+      fullServerArgs += ` --identity-token "${identityToken}"`;
+    }
+    if (ownerUuid) {
+      fullServerArgs += ` --owner-uuid "${ownerUuid}"`;
+    }
+
     const container = await docker.createContainer({
       name: containerName,
       Image: process.env.HYTALE_IMAGE || 'eclipse-temurin:25-jre',
       Cmd: [
         'sh', '-c',
-        `cd Server && java ${jvmArgs || '-Xms2G -Xmx2G -XX:+UseG1GC'} -jar HytaleServer.jar ${serverArgs || '--assets ../Assets.zip --backup --backup-dir backups --backup-frequency 30'}`,
+        `cd Server && java ${jvmArgs || '-Xms2G -Xmx2G -XX:+UseG1GC'} -jar HytaleServer.jar ${fullServerArgs}`,
       ],
+      OpenStdin: true,
+      StdinOnce: false,
       ExposedPorts: {
         [`${port}/udp`]: {},
       },
@@ -258,6 +278,13 @@ class DockerManager {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Get Docker system info
+   */
+  async getInfo(): Promise<Record<string, unknown>> {
+    return docker.info();
   }
 }
 

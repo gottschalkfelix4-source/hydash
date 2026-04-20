@@ -229,8 +229,8 @@ async function getContainerId(serverId: string): Promise<string | null> {
 
 /**
  * Handle a console command from a WebSocket client.
- * Writes the command to the server process stdin via /proc/1/fd/0
- * using docker exec with an array (no shell interpolation of the command text).
+ * Writes the command to PID 1's stdin via /proc/1/fd/0 using docker exec.
+ * Requires containers created with OpenStdin: true (so stdin is a pipe, not /dev/null).
  */
 async function handleConsoleCommand(serverId: string, command: string, payload: JwtPayload): Promise<void> {
   logger.info(`Console command from user ${payload.userId} on server ${serverId}: ${command}`);
@@ -244,11 +244,14 @@ async function handleConsoleCommand(serverId: string, command: string, payload: 
   try {
     const container = docker.getContainer(containerId);
 
-    // Use docker exec with explicit args array (no shell interpolation of user command)
-    // Write command to PID 1's stdin which is the Java server process
+    // Sanitize command - allow typical game server commands
     const sanitized = command.replace(/[^a-zA-Z0-9 _\-./:=!@#$%^&*()+\[\]{}|;?',]/g, '');
+
+    // Write command to PID 1's stdin via /proc/1/fd/0
+    // This works because containers are created with OpenStdin: true,
+    // so stdin is a pipe rather than /dev/null.
     const exec = await container.exec({
-      Cmd: ['sh', '-c', 'printf "%s\\n" "$0" > /proc/1/fd/0 2>/dev/null', sanitized],
+      Cmd: ['sh', '-c', 'printf "%s\\n" "$0" > /proc/1/fd/0', sanitized],
       AttachStdout: true,
       AttachStderr: true,
     });

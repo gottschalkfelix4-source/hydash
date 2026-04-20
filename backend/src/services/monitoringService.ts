@@ -1,3 +1,5 @@
+import os from 'os';
+import { execFileSync } from 'child_process';
 import { query, getOne, getMany } from '../models/db';
 import { MetricsSnapshot, HealthAnalysis, HealthIssue } from '../types';
 import { dockerManager } from '../utils/docker';
@@ -345,5 +347,102 @@ export async function getMonitoringOverview(userId: string, roles: string[]): Pr
     onlineServers: parseInt(result?.online || '0'),
     totalMemoryUsed: parseFloat(result?.memoryUsed || '0'),
     totalMemoryLimit: parseFloat(result?.memoryLimit || '0'),
+  };
+}
+
+/**
+ * Get host system information (CPU, RAM, disk, Docker info)
+ */
+export async function getSystemInfo(): Promise<{
+  cpu: { model: string; cores: number; loadAvg: [number, number, number]; usagePercent: number };
+  memory: { totalMb: number; usedMb: number; freeMb: number; usagePercent: number };
+  disk: { totalGb: number; usedGb: number; freeGb: number; usagePercent: number };
+  uptime: number;
+  hostname: string;
+  platform: string;
+  osRelease: string;
+  docker: { version: string; containersRunning: number; containersPaused: number; containersStopped: number; images: number };
+}> {
+  // CPU info
+  const cpus = os.cpus();
+  const loadAvg = os.loadavg() as [number, number, number];
+  const cpuModel = cpus.length > 0 ? cpus[0].model : 'Unknown';
+  const cpuCores = cpus.length;
+  const cpuUsagePercent = Math.min((loadAvg[0] / cpuCores) * 100, 100);
+
+  // Memory info
+  const totalMem = os.totalmem();
+  const freeMem = os.freemem();
+  const usedMem = totalMem - freeMem;
+
+  // Disk info - parse df output
+  let diskTotalGb = 0;
+  let diskUsedGb = 0;
+  let diskFreeGb = 0;
+  let diskUsagePercent = 0;
+  try {
+    const dfOutput = execFileSync('df', ['-BG', '/'], { encoding: 'utf-8', timeout: 5000 });
+    const lines = dfOutput.trim().split('\n');
+    if (lines.length >= 2) {
+      const parts = lines[1].trim().split(/\s+/);
+      // df -BG output: Filesystem 1G-blocks Used Available Use% Mounted
+      diskTotalGb = parseFloat(parts[1]);
+      diskUsedGb = parseFloat(parts[2]);
+      diskFreeGb = parseFloat(parts[3]);
+      const pct = parseFloat(parts[4]);
+      diskUsagePercent = isNaN(pct) ? (diskTotalGb > 0 ? (diskUsedGb / diskTotalGb) * 100 : 0) : pct;
+    }
+  } catch (err) {
+    logger.warn('Failed to get disk info:', err);
+  }
+
+  // Docker info
+  let dockerInfo: { version: string; containersRunning: number; containersPaused: number; containersStopped: number; images: number } = {
+    version: 'unknown',
+    containersRunning: 0,
+    containersPaused: 0,
+    containersStopped: 0,
+    images: 0,
+  };
+  try {
+    const info = await dockerManager.getInfo();
+    const containers = Number(info.Containers) || 0;
+    const containersPaused = Number(info.ContainersPaused) || 0;
+    const containersStopped = Number(info.ContainersStopped) || 0;
+    dockerInfo = {
+      version: String(info.ServerVersion || 'unknown'),
+      containersRunning: containers - containersPaused - containersStopped,
+      containersPaused,
+      containersStopped,
+      images: Number(info.Images) || 0,
+    };
+  } catch (err) {
+    logger.warn('Failed to get Docker info:', err);
+  }
+
+  return {
+    cpu: {
+      model: cpuModel,
+      cores: cpuCores,
+      loadAvg,
+      usagePercent: Math.round(cpuUsagePercent * 10) / 10,
+    },
+    memory: {
+      totalMb: Math.round(totalMem / (1024 * 1024)),
+      usedMb: Math.round(usedMem / (1024 * 1024)),
+      freeMb: Math.round(freeMem / (1024 * 1024)),
+      usagePercent: Math.round((usedMem / totalMem) * 100 * 10) / 10,
+    },
+    disk: {
+      totalGb: diskTotalGb,
+      usedGb: diskUsedGb,
+      freeGb: diskFreeGb,
+      usagePercent: Math.round(diskUsagePercent * 10) / 10,
+    },
+    uptime: Math.floor(os.uptime()),
+    hostname: os.hostname(),
+    platform: os.platform(),
+    osRelease: os.release(),
+    docker: dockerInfo,
   };
 }

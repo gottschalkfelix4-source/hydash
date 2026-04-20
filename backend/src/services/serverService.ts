@@ -3,6 +3,7 @@ import { Server, ServerStatus, createServerSchema, updateServerSchema, HytaleCon
 import { dockerManager } from '../utils/docker';
 import { cacheDel, RedisKeys } from '../models/redis';
 import logger from '../utils/logger';
+import * as hytaleAuthService from './hytaleAuthService';
 
 /**
  * Create a new server
@@ -178,6 +179,24 @@ export async function startServer(serverId: string): Promise<Server> {
 
     // Create container if it doesn't exist
     if (!containerId) {
+      // Try to get session tokens for authenticated Hytale servers
+      let sessionToken: string | undefined;
+      let identityToken: string | undefined;
+      let ownerUuid: string | undefined;
+
+      try {
+        const session = await hytaleAuthService.authenticateServer(serverId);
+        if (session) {
+          sessionToken = session.sessionToken;
+          identityToken = session.identityToken;
+          ownerUuid = session.ownerUuid;
+          logger.info(`Got session tokens for server ${serverId}`);
+        }
+      } catch (err) {
+        logger.warn(`Failed to get session tokens for server ${serverId}:`, err);
+        // Continue without tokens - server will start in offline/unauthenticated mode
+      }
+
       containerId = await dockerManager.createContainer({
         name: server.name,
         port: server.port,
@@ -186,6 +205,9 @@ export async function startServer(serverId: string): Promise<Server> {
         jvmArgs: server.jvmArgs,
         serverArgs: server.serverArgs,
         serverId: server.id,
+        sessionToken,
+        identityToken,
+        ownerUuid,
       });
       await query('UPDATE servers SET container_id = $1 WHERE id = $2', [containerId, serverId]);
     }

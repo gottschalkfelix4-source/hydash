@@ -58,3 +58,12 @@ export async function getMonitoringOverview(req: Request, res: Response): Promis
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
 }
+
+export async function getSystemInfo(req: Request, res: Response): Promise<void> {
+  try {
+    const systemInfo = await monitoringService.getSystemInfo();
+    res.json({ success: true, data: systemInfo });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}

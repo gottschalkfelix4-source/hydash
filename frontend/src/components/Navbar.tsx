@@ -37,7 +37,7 @@ export default function Navbar() {
               <Link
                 to="/servers"
                 className={`flex items-center space-x-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                  location.pathname === '/' || location.pathname.startsWith('/servers') ? 'bg-gray-700 text-white' : 'text-gray-300 hover:text-white hover:bg-gray-700'
+                  location.pathname.startsWith('/servers') ? 'bg-gray-700 text-white' : 'text-gray-300 hover:text-white hover:bg-gray-700'
                 }`}
               >
                 <Server className="w-4 h-4" />

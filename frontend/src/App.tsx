@@ -2,6 +2,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 import Navbar from './components/Navbar';
 import Dashboard from './pages/Dashboard';
+import Servers from './pages/Servers';
 import Login from './pages/Login';
 import ServerDetail from './pages/ServerDetail';
 import ScheduledTasks from './pages/ScheduledTasks';
@@ -39,7 +40,11 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          <Route path="/servers" element={<Navigate to="/" replace />} />
+          <Route path="/servers" element={
+              <ProtectedRoute>
+                <Servers />
+              </ProtectedRoute>
+            } />
           <Route
             path="/servers/:id"
             element={

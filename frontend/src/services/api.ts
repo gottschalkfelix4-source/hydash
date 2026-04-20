@@ -116,6 +116,7 @@ export const monitoringApi = {
   logs: (serverId: string, limit?: number) =>
     api.get(`/servers/${serverId}/monitoring/logs`, { params: { limit } }),
   overview: () => api.get('/monitoring/overview'),
+  system: () => api.get('/monitoring/system'),
 };
 
 // ============================================

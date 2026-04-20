@@ -2,7 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { serverApi, monitoringApi } from '../services/api';
-import { Play, Square, RotateCw, HardDrive, Clock, Terminal, Package, ArrowLeft, Activity, FolderOpen, Trash2, Users } from 'lucide-react';
+import { Play, Square, RotateCw, HardDrive, Clock, Terminal, Package, ArrowLeft, Activity, FolderOpen, Trash2, Users, AlertTriangle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import StatusBadge from '../components/StatusBadge';
 import MetricCard from '../components/MetricCard';
@@ -78,6 +78,8 @@ export default function ServerDetail() {
   const server = serverData?.data?.data;
   const metrics = metricsData?.data?.data;
   const health = healthData?.data?.data;
+
+  const hasAuth = !!(server as Record<string, unknown>)?.config && typeof ((server as Record<string, unknown>).config as Record<string, unknown>)?.hytaleAuth === 'object';
 
   if (serverLoading) return <div className="text-gray-400 text-center py-12">Server wird geladen...</div>;
   if (!server) return <div className="text-red-400 text-center py-12">Server nicht gefunden</div>;
@@ -167,6 +169,22 @@ export default function ServerDetail() {
       {/* Tab Content */}
       {activeTab === 'overview' && (
         <div className="space-y-4">
+          {/* Auth Warning */}
+          {!hasAuth && (
+            <div
+              className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 flex items-start space-x-3 cursor-pointer hover:bg-yellow-500/20 transition-colors"
+              onClick={() => setActiveTab('setup')}
+            >
+              <AlertTriangle className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-yellow-400 font-medium">Hytale-Authentifizierung erforderlich</p>
+                <p className="text-yellow-400/70 text-sm mt-1">
+                  Dieser Server hat keine Hytale-Authentifizierung konfiguriert. Spieler können sich nicht verbinden.
+                  Klicke hier, um die Einrichtung abzuschließen.
+                </p>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <MetricCard
               title="CPU"
