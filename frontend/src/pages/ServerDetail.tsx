@@ -30,6 +30,23 @@ export default function ServerDetail() {
     },
   });
 
+  const startMutation = useMutation({
+    mutationFn: (id: string) => serverApi.start(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['server', serverId] }),
+  });
+
+  const stopMutation = useMutation({
+    mutationFn: (id: string) => serverApi.stop(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['server', serverId] }),
+  });
+
+  const restartMutation = useMutation({
+    mutationFn: (id: string) => serverApi.restart(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['server', serverId] }),
+  });
+
+  const lifecyclePending = startMutation.isPending || stopMutation.isPending || restartMutation.isPending;
+
   const handleDelete = () => {
     if (confirm(`"${server?.name}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`)) {
       deleteMutation.mutate(safeServerId);
@@ -91,14 +108,29 @@ export default function ServerDetail() {
         </div>
         <div className="flex items-center space-x-3">
           <StatusBadge status={server.status} />
-          <button onClick={() => serverApi.start(safeServerId)} className="p-2 bg-green-600 hover:bg-green-700 rounded text-white" title="Starten">
+          <button
+            onClick={() => startMutation.mutate(safeServerId)}
+            disabled={server.status === 'running' || server.status === 'starting' || lifecyclePending}
+            className="p-2 bg-green-600 hover:bg-green-700 rounded text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            title="Starten"
+          >
             <Play className="w-4 h-4" />
           </button>
-          <button onClick={() => serverApi.stop(safeServerId)} className="p-2 bg-red-600 hover:bg-red-700 rounded text-white" title="Stoppen">
+          <button
+            onClick={() => stopMutation.mutate(safeServerId)}
+            disabled={server.status === 'stopped' || server.status === 'stopping' || lifecyclePending}
+            className="p-2 bg-red-600 hover:bg-red-700 rounded text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            title="Stoppen"
+          >
             <Square className="w-4 h-4" />
           </button>
-          <button onClick={() => serverApi.restart(safeServerId)} className="p-2 bg-yellow-600 hover:bg-yellow-700 rounded text-white" title="Neustarten">
-            <RotateCw className="w-4 h-4" />
+          <button
+            onClick={() => restartMutation.mutate(safeServerId)}
+            disabled={server.status !== 'running' || lifecyclePending}
+            className="p-2 bg-yellow-600 hover:bg-yellow-700 rounded text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            title="Neustarten"
+          >
+            <RotateCw className={restartMutation.isPending ? 'w-4 h-4 animate-spin' : 'w-4 h-4'} />
           </button>
           <div className="w-px h-6 bg-gray-700" />
           <button

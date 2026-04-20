@@ -40,30 +40,35 @@ export default function Dashboard() {
     totalMemoryLimit: 0,
   };
 
-  const handleStart = async (id: string) => {
-    try { await serverApi.start(id); refetchServers(); }
-    catch { /* error handling */ }
+  const handleStart = (id: string) => {
+    serverApi.start(id).then(() => {
+      queryClient.invalidateQueries({ queryKey: ['servers'] });
+      queryClient.invalidateQueries({ queryKey: ['monitoring-overview'] });
+    }).catch(() => {});
   };
 
-  const handleStop = async (id: string) => {
-    try { await serverApi.stop(id); refetchServers(); }
-    catch { /* error handling */ }
+  const handleStop = (id: string) => {
+    serverApi.stop(id).then(() => {
+      queryClient.invalidateQueries({ queryKey: ['servers'] });
+      queryClient.invalidateQueries({ queryKey: ['monitoring-overview'] });
+    }).catch(() => {});
   };
 
-  const handleRestart = async (id: string) => {
-    try { await serverApi.restart(id); refetchServers(); }
-    catch { /* error handling */ }
+  const handleRestart = (id: string) => {
+    serverApi.restart(id).then(() => {
+      queryClient.invalidateQueries({ queryKey: ['servers'] });
+      queryClient.invalidateQueries({ queryKey: ['monitoring-overview'] });
+    }).catch(() => {});
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     const server = servers.find(s => s.id === id);
     if (!server) return;
     if (!confirm(`"${server.name}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`)) return;
-    try {
-      await serverApi.delete(id);
+    serverApi.delete(id).then(() => {
       queryClient.invalidateQueries({ queryKey: ['servers'] });
       queryClient.invalidateQueries({ queryKey: ['monitoring-overview'] });
-    } catch { /* error handling */ }
+    }).catch(() => {});
   };
 
   return (
