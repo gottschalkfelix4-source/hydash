@@ -1,18 +1,19 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { serverApi, monitoringApi } from '../services/api';
+import { serverApi, monitoringApi } from '@/services/api';
 import { Play, Square, RotateCw, HardDrive, Clock, Terminal, Package, ArrowLeft, Activity, FolderOpen, Trash2, Users, AlertTriangle } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import StatusBadge from '../components/StatusBadge';
-import MetricCard from '../components/MetricCard';
-import Console from '../components/Console';
-import ModsManager from '../components/ModsManager';
-import BackupsManager from '../components/BackupsManager';
-import FileManager from '../components/FileManager';
-import MonitoringCharts from '../components/MonitoringCharts';
-import HytaleSetupWizard from '../components/HytaleSetupWizard';
-import ScheduledTaskManager from '../components/ScheduledTaskManager';
+import StatusBadge from '@/components/StatusBadge';
+import MetricCard from '@/components/MetricCard';
+import Console from '@/components/Console';
+import ModsManager from '@/components/ModsManager';
+import BackupsManager from '@/components/BackupsManager';
+import FileManager from '@/components/FileManager';
+import MonitoringCharts from '@/components/MonitoringCharts';
+import HytaleSetupWizard from '@/components/HytaleSetupWizard';
+import ScheduledTaskManager from '@/components/ScheduledTaskManager';
+import ConfirmModal from '@/components/ConfirmModal';
 
 type Tab = 'overview' | 'console' | 'mods' | 'backups' | 'tasks' | 'files' | 'monitoring' | 'setup';
 
@@ -21,6 +22,7 @@ export default function ServerDetail() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => serverApi.delete(id),
@@ -48,9 +50,7 @@ export default function ServerDetail() {
   const lifecyclePending = startMutation.isPending || stopMutation.isPending || restartMutation.isPending;
 
   const handleDelete = () => {
-    if (confirm(`"${server?.name}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`)) {
-      deleteMutation.mutate(safeServerId);
-    }
+    setShowDeleteModal(true);
   };
 
   const { data: serverData, isLoading: serverLoading } = useQuery({
@@ -287,6 +287,17 @@ export default function ServerDetail() {
       {activeTab === 'setup' && (
         <HytaleSetupWizard serverId={safeServerId} />
       )}
+
+      <ConfirmModal
+        open={showDeleteModal}
+        onConfirm={() => deleteMutation.mutate(safeServerId)}
+        onCancel={() => setShowDeleteModal(false)}
+        title="Server löschen"
+        message={`„${server?.name}" wird unwiderruflich gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.`}
+        confirmLabel="Löschen"
+        confirmVariant="danger"
+        isLoading={deleteMutation.isPending}
+      />
     </div>
   );
 }

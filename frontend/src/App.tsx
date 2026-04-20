@@ -1,30 +1,50 @@
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useAuthStore } from './store/authStore';
-import Navbar from './components/Navbar';
-import Dashboard from './pages/Dashboard';
-import Servers from './pages/Servers';
-import Login from './pages/Login';
-import ServerDetail from './pages/ServerDetail';
-import ScheduledTasks from './pages/ScheduledTasks';
-import Settings from './pages/Settings';
+import { useEffect } from 'react';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { useAuthStore } from '@/store/authStore';
+import { setNavigator } from '@/services/api';
+import Navbar from '@/components/Navbar';
+import Dashboard from '@/pages/Dashboard';
+import Servers from '@/pages/Servers';
+import Login from '@/pages/Login';
+import ServerDetail from '@/pages/ServerDetail';
+import Settings from '@/pages/Settings';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, isCheckingAuth } = useAuthStore();
+  if (isCheckingAuth) {
+    return <div className="flex items-center justify-center min-h-screen bg-gray-900 text-gray-400">Authentifizierung wird geprüft...</div>;
+  }
   if (!isAuthenticated) return <Navigate to="/login" />;
   return <>{children}</>;
 }
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, user } = useAuthStore();
+  const { isAuthenticated, isCheckingAuth, user } = useAuthStore();
+  if (isCheckingAuth) {
+    return <div className="flex items-center justify-center min-h-screen bg-gray-900 text-gray-400">Authentifizierung wird geprüft...</div>;
+  }
   if (!isAuthenticated) return <Navigate to="/login" />;
   if (!user?.roles?.includes('admin')) return <Navigate to="/" />;
   return <>{children}</>;
 }
 
 export default function App() {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, isCheckingAuth } = useAuthStore();
   const location = useLocation();
+  const navigate = useNavigate();
   const hideNavbar = location.pathname === '/login';
+
+  useEffect(() => {
+    setNavigator(navigate);
+  }, [navigate]);
+
+  useEffect(() => {
+    useAuthStore.getState().checkAuth();
+  }, []);
+
+  if (isCheckingAuth) {
+    return <div className="flex items-center justify-center min-h-screen bg-gray-900 text-gray-400">Authentifizierung wird geprüft...</div>;
+  }
 
   return (
     <div className="min-h-screen bg-gray-900">
@@ -55,11 +75,7 @@ export default function App() {
           />
           <Route
             path="/servers/:id/tasks"
-            element={
-              <ProtectedRoute>
-                <ScheduledTasks />
-              </ProtectedRoute>
-            }
+            element={<Navigate to="/servers/:id" replace />}
           />
           <Route
             path="/settings"

@@ -7,6 +7,7 @@ import {
   Shield, X, UserPlus, Lock
 } from 'lucide-react';
 import { Role, Permission } from '../types';
+import ConfirmModal from '@/components/ConfirmModal';
 
 type ModalType = 'createUser' | 'editUser' | 'resetPassword' | 'createRole' | 'editRolePermissions' | 'changeOwnPassword' | null;
 
@@ -19,6 +20,7 @@ export default function Settings() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
   const [roleDropdownOpen, setRoleDropdownOpen] = useState<string | null>(null);
+  const [confirmState, setConfirmState] = useState<{open: boolean, onConfirm: () => void, title: string, message: string} | null>(null);
 
   // Form states
   const [createUserForm, setCreateUserForm] = useState({ email: '', password: '', displayName: '', roleIds: [] as string[] });
@@ -632,7 +634,7 @@ export default function Settings() {
                           <Key className="w-4 h-4" />
                         </button>
                         {u.id !== user?.id && (
-                          <button onClick={() => { if (confirm(`Benutzer "${u.email}" wirklich löschen?`)) deleteUserMutation.mutate(u.id); }}
+                          <button onClick={() => { setConfirmState({open: true, onConfirm: () => deleteUserMutation.mutate(u.id), title: 'Benutzer löschen', message: `Benutzer "${u.email}" wirklich löschen?`}); }}
                             disabled={deleteUserMutation.isPending}
                             className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors disabled:opacity-50" title="Löschen">
                             <Trash2 className="w-4 h-4" />
@@ -677,7 +679,7 @@ export default function Settings() {
                       <Edit3 className="w-4 h-4" />
                     </button>
                     {!role.isSystem && (
-                      <button onClick={() => { if (confirm(`Rolle "${role.name}" wirklich löschen?`)) deleteRoleMutation.mutate(role.id); }}
+                      <button onClick={() => { setConfirmState({open: true, onConfirm: () => deleteRoleMutation.mutate(role.id), title: 'Rolle löschen', message: `Rolle "${role.name}" wirklich löschen?`}); }}
                         disabled={deleteRoleMutation.isPending}
                         className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors disabled:opacity-50" title="Löschen">
                         <Trash2 className="w-4 h-4" />
@@ -704,6 +706,15 @@ export default function Settings() {
 
       {/* Modals */}
       {renderModal()}
+
+      <ConfirmModal
+        open={!!confirmState}
+        onConfirm={() => { confirmState?.onConfirm(); setConfirmState(null); }}
+        onCancel={() => setConfirmState(null)}
+        title={confirmState?.title || ''}
+        message={confirmState?.message || ''}
+        confirmVariant="danger"
+      />
     </div>
   );
 }

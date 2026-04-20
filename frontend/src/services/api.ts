@@ -3,11 +3,17 @@ import { useAuthStore } from '../store/authStore';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
+let navigateFn: ((path: string) => void) | null = null;
+export function setNavigator(fn: (path: string) => void) {
+  navigateFn = fn;
+}
+
 const api = axios.create({
   baseURL: `${API_BASE}/api/v1`,
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 15000,
 });
 
 // Request interceptor: add auth token
@@ -19,7 +25,9 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Response interceptor: handle 401 with token refresh
+// Response interceptor: handle 401 with deduplicated token refresh
+let refreshPromise: Promise<void> | null = null;
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -28,13 +36,22 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       try {
-        await useAuthStore.getState().refreshToken();
+        if (!refreshPromise) {
+          refreshPromise = useAuthStore.getState().refreshToken().finally(() => {
+            refreshPromise = null;
+          });
+        }
+        await refreshPromise;
         const { accessToken } = useAuthStore.getState();
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return api(originalRequest);
       } catch {
         useAuthStore.getState().logout();
-        window.location.href = '/login';
+        if (navigateFn) {
+          navigateFn('/login');
+        } else {
+          window.location.href = '/login';
+        }
       }
     }
 

@@ -1,23 +1,17 @@
 import { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Server as ServerIcon, Wifi, MemoryStick, Cpu } from 'lucide-react';
-import { serverApi, monitoringApi } from '../services/api';
-import ServerCard from '../components/ServerCard';
-import MetricCard from '../components/MetricCard';
-import CreateServerModal from '../components/CreateServerModal';
-
-interface Server {
-  id: string;
-  name: string;
-  port: number;
-  memoryLimitMb: number;
-  viewDistance: number;
-  status: string;
-  tags: string[];
-}
+import { serverApi, monitoringApi } from '@/services/api';
+import ServerCard from '@/components/ServerCard';
+import MetricCard from '@/components/MetricCard';
+import CreateServerModal from '@/components/CreateServerModal';
+import ConfirmModal from '@/components/ConfirmModal';
+import type { Server } from '@/types';
 
 export default function Servers() {
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const queryClient = useQueryClient();
 
   const { data: serversData, isLoading: serversLoading, refetch: refetchServers } = useQuery({
@@ -40,36 +34,34 @@ export default function Servers() {
     totalMemoryLimit: 0,
   };
 
-  const handleStart = (id: string) => {
-    serverApi.start(id).then(() => {
-      queryClient.invalidateQueries({ queryKey: ['servers'] });
-      queryClient.invalidateQueries({ queryKey: ['monitoring-overview'] });
-    }).catch(() => {});
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ['servers'] });
+    queryClient.invalidateQueries({ queryKey: ['monitoring-overview'] });
   };
 
-  const handleStop = (id: string) => {
-    serverApi.stop(id).then(() => {
-      queryClient.invalidateQueries({ queryKey: ['servers'] });
-      queryClient.invalidateQueries({ queryKey: ['monitoring-overview'] });
-    }).catch(() => {});
-  };
+  const startMutation = useMutation({
+    mutationFn: (id: string) => serverApi.start(id),
+    onSuccess: invalidateAll,
+    onError: (err) => setError(err instanceof Error ? err.message : 'Fehler beim Starten'),
+  });
 
-  const handleRestart = (id: string) => {
-    serverApi.restart(id).then(() => {
-      queryClient.invalidateQueries({ queryKey: ['servers'] });
-      queryClient.invalidateQueries({ queryKey: ['monitoring-overview'] });
-    }).catch(() => {});
-  };
+  const stopMutation = useMutation({
+    mutationFn: (id: string) => serverApi.stop(id),
+    onSuccess: invalidateAll,
+    onError: (err) => setError(err instanceof Error ? err.message : 'Fehler beim Stoppen'),
+  });
 
-  const handleDelete = (id: string) => {
-    const server = servers.find(s => s.id === id);
-    if (!server) return;
-    if (!confirm(`"${server.name}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`)) return;
-    serverApi.delete(id).then(() => {
-      queryClient.invalidateQueries({ queryKey: ['servers'] });
-      queryClient.invalidateQueries({ queryKey: ['monitoring-overview'] });
-    }).catch(() => {});
-  };
+  const restartMutation = useMutation({
+    mutationFn: (id: string) => serverApi.restart(id),
+    onSuccess: invalidateAll,
+    onError: (err) => setError(err instanceof Error ? err.message : 'Fehler beim Neustarten'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => serverApi.delete(id),
+    onSuccess: () => { invalidateAll(); setDeleteTarget(null); },
+    onError: (err) => { setError(err instanceof Error ? err.message : 'Fehler beim Löschen'); setDeleteTarget(null); },
+  });
 
   return (
     <div className="space-y-6">
@@ -83,6 +75,13 @@ export default function Servers() {
           <span>Server erstellen</span>
         </button>
       </div>
+
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm flex items-center justify-between">
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="text-red-400 hover:text-red-300 ml-4 font-medium">Schließen</button>
+        </div>
+      )}
 
       {/* Overview Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -134,10 +133,13 @@ export default function Servers() {
               <ServerCard
                 key={server.id}
                 server={server}
-                onStart={handleStart}
-                onStop={handleStop}
-                onRestart={handleRestart}
-                onDelete={handleDelete}
+                onStart={(id) => startMutation.mutate(id)}
+                onStop={(id) => stopMutation.mutate(id)}
+                onRestart={(id) => restartMutation.mutate(id)}
+                onDelete={(id) => {
+                  const s = servers.find(s => s.id === id);
+                  if (s) setDeleteTarget({ id: s.id, name: s.name });
+                }}
               />
             ))}
           </div>
@@ -150,6 +152,17 @@ export default function Servers() {
           onCreated={() => { setShowCreateModal(false); refetchServers(); }}
         />
       )}
+
+      <ConfirmModal
+        open={deleteTarget !== null}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+        onCancel={() => setDeleteTarget(null)}
+        title="Server löschen"
+        message={`„${deleteTarget?.name}" wird unwiderruflich gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.`}
+        confirmLabel="Löschen"
+        confirmVariant="danger"
+        isLoading={deleteMutation.isPending}
+      />
     </div>
   );
 }

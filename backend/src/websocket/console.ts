@@ -11,71 +11,99 @@ interface ConsoleConnection {
   ws: WebSocket;
   serverId: string;
   userId: string;
+  authenticated: boolean;
 }
 
 const connections = new Map<string, ConsoleConnection[]>();
 
-// Active log streams per serverId
 const logStreams = new Map<string, {
   stream: NodeJS.ReadableStream & { destroy?: () => void };
 }>();
+
+const AUTH_TIMEOUT_MS = 10000;
 
 export function initWebSocket(httpServer: HttpServer): WebSocketServer {
   const wss = new WebSocketServer({ server: httpServer, path: '/ws/console' });
 
   wss.on('connection', (ws, req) => {
     const url = new URL(req.url || '', `http://${req.headers.host}`);
-    const token = url.searchParams.get('token');
     const serverId = url.searchParams.get('serverId');
 
-    if (!token || !serverId) {
-      ws.close(4001, 'Missing token or serverId');
-      return;
-    }
-
-    const payload = verifyToken(token);
-    if (!payload) {
-      ws.close(4002, 'Invalid token');
+    if (!serverId) {
+      ws.close(4001, 'Missing serverId');
       return;
     }
 
     const connection: ConsoleConnection = {
       ws,
       serverId,
-      userId: payload.userId,
+      userId: '',
+      authenticated: false,
     };
 
-    // Track connection
-    if (!connections.has(serverId)) {
-      connections.set(serverId, []);
-    }
-    connections.get(serverId)!.push(connection);
+    const authTimer = setTimeout(() => {
+      if (!connection.authenticated) {
+        ws.close(4003, 'Auth timeout');
+      }
+    }, AUTH_TIMEOUT_MS);
 
-    logger.info(`WebSocket connected: user=${payload.userId}, server=${serverId}`);
-
-    // Send connection confirmation
-    ws.send(JSON.stringify({
-      type: 'status',
-      data: 'connected',
-      timestamp: new Date().toISOString(),
-    }));
-
-    // Send recent logs and start live streaming
-    sendRecentLogs(serverId).catch(() => {});
-    startLogStreaming(serverId);
-
-    ws.on('message', (data) => {
+    const authHandler = (data: Buffer) => {
       try {
         const message = JSON.parse(data.toString());
-        if (message.type === 'command') {
-          handleConsoleCommand(serverId, message.command, payload);
+
+        if (message.type === 'auth') {
+          const payload = verifyToken(message.token);
+          if (!payload) {
+            ws.send(JSON.stringify({ type: 'auth_error', data: 'Invalid token' }));
+            ws.close(4002, 'Invalid token');
+            clearTimeout(authTimer);
+            return;
+          }
+
+          connection.authenticated = true;
+          connection.userId = payload.userId;
+
+          ws.removeListener('message', authHandler);
+          clearTimeout(authTimer);
+
+          if (!connections.has(serverId)) {
+            connections.set(serverId, []);
+          }
+          connections.get(serverId)!.push(connection);
+
+          logger.info(`WebSocket authenticated: user=${payload.userId}, server=${serverId}`);
+
+          ws.send(JSON.stringify({ type: 'auth_ok' }));
+
+          ws.send(JSON.stringify({
+            type: 'status',
+            data: 'connected',
+            timestamp: new Date().toISOString(),
+          }));
+
+          sendRecentLogs(serverId).catch(() => {});
+          startLogStreaming(serverId);
+
+          ws.on('message', (cmdData: Buffer) => {
+            try {
+              const cmdMessage = JSON.parse(cmdData.toString());
+              if (cmdMessage.type === 'command') {
+                handleConsoleCommand(serverId, cmdMessage.command, payload);
+              }
+            } catch (error) {
+              logger.error('WebSocket message parse error:', error);
+            }
+          });
         }
-      } catch (error) {
-        logger.error('WebSocket message parse error:', error);
+      } catch {
+        // Ignore non-JSON during auth phase
       }
-    });
+    };
+
+    ws.on('message', authHandler);
 
     ws.on('close', () => {
+      clearTimeout(authTimer);
       const serverConnections = connections.get(serverId);
       if (serverConnections) {
         const idx = serverConnections.indexOf(connection);
@@ -85,7 +113,9 @@ export function initWebSocket(httpServer: HttpServer): WebSocketServer {
           stopLogStreaming(serverId);
         }
       }
-      logger.info(`WebSocket disconnected: user=${payload.userId}, server=${serverId}`);
+      if (connection.authenticated) {
+        logger.info(`WebSocket disconnected: user=${connection.userId}, server=${serverId}`);
+      }
     });
 
     ws.on('error', (error) => {
@@ -96,9 +126,6 @@ export function initWebSocket(httpServer: HttpServer): WebSocketServer {
   return wss;
 }
 
-/**
- * Broadcast a log message to all connected clients for a server
- */
 export function broadcastLog(serverId: string, level: string, message: string): void {
   const serverConnections = connections.get(serverId);
   if (!serverConnections) return;
@@ -117,9 +144,6 @@ export function broadcastLog(serverId: string, level: string, message: string): 
   }
 }
 
-/**
- * Send the last N lines of logs from the container to connected clients
- */
 async function sendRecentLogs(serverId: string): Promise<void> {
   try {
     const containerId = await getContainerId(serverId);
@@ -136,12 +160,8 @@ async function sendRecentLogs(serverId: string): Promise<void> {
   }
 }
 
-/**
- * Start live streaming logs from the Docker container.
- * Only one stream per serverId; reuses if already active.
- */
 function startLogStreaming(serverId: string): void {
-  if (logStreams.has(serverId)) return; // already streaming
+  if (logStreams.has(serverId)) return;
 
   getContainerId(serverId).then(containerId => {
     if (!containerId) return;
@@ -162,17 +182,16 @@ function startLogStreaming(serverId: string): void {
 
       logStreams.set(serverId, { stream });
 
-      // Parse Docker log stream frames (8-byte header per frame)
       let buffer = Buffer.alloc(0);
 
       stream.on('data', (chunk: Buffer) => {
         buffer = Buffer.concat([buffer, chunk]);
 
         while (buffer.length >= 8) {
-          const streamType = buffer[0]; // 1=stdout, 2=stderr
+          const streamType = buffer[0];
           const length = buffer.readUInt32BE(4);
 
-          if (buffer.length < 8 + length) break; // incomplete frame
+          if (buffer.length < 8 + length) break;
 
           const payload = buffer.toString('utf-8', 8, 8 + length).trim();
           buffer = buffer.subarray(8 + length);
@@ -199,9 +218,6 @@ function startLogStreaming(serverId: string): void {
   });
 }
 
-/**
- * Stop the live log stream for a server
- */
 function stopLogStreaming(serverId: string): void {
   const entry = logStreams.get(serverId);
   if (entry) {
@@ -211,9 +227,6 @@ function stopLogStreaming(serverId: string): void {
   }
 }
 
-/**
- * Get the container ID for a server from the database
- */
 async function getContainerId(serverId: string): Promise<string | null> {
   try {
     const { getOne } = await import('../models/db');
@@ -227,11 +240,6 @@ async function getContainerId(serverId: string): Promise<string | null> {
   }
 }
 
-/**
- * Handle a console command from a WebSocket client.
- * Writes the command to PID 1's stdin via /proc/1/fd/0 using docker exec.
- * Requires containers created with OpenStdin: true (so stdin is a pipe, not /dev/null).
- */
 async function handleConsoleCommand(serverId: string, command: string, payload: JwtPayload): Promise<void> {
   logger.info(`Console command from user ${payload.userId} on server ${serverId}: ${command}`);
 
@@ -243,13 +251,8 @@ async function handleConsoleCommand(serverId: string, command: string, payload: 
 
   try {
     const container = docker.getContainer(containerId);
-
-    // Sanitize command - allow typical game server commands
     const sanitized = command.replace(/[^a-zA-Z0-9 _\-./:=!@#$%^&*()+\[\]{}|;?',]/g, '');
 
-    // Write command to PID 1's stdin via /proc/1/fd/0
-    // This works because containers are created with OpenStdin: true,
-    // so stdin is a pipe rather than /dev/null.
     const exec = await container.exec({
       Cmd: ['sh', '-c', 'printf "%s\\n" "$0" > /proc/1/fd/0', sanitized],
       AttachStdout: true,
@@ -269,9 +272,6 @@ async function handleConsoleCommand(serverId: string, command: string, payload: 
   }
 }
 
-/**
- * Start streaming logs from a Docker container (legacy API)
- */
 export async function startLogStreamingLegacy(serverId: string, containerId: string): Promise<void> {
   try {
     const { dockerManager } = await import('../utils/docker');

@@ -85,16 +85,16 @@ export default function HytaleSetupWizard({ serverId }: SetupWizardProps) {
     mutationFn: () => hytaleApi.download(serverId),
     onSuccess: () => {
       // Start polling for download status
-      const pollInterval = setInterval(async () => {
+      pollRef.current = setInterval(async () => {
         try {
           const statusRes = await hytaleApi.setupStatus(serverId);
           const status = statusRes.data?.data;
           if (status?.status === 'completed' || status?.status === 'done') {
-            clearInterval(pollInterval);
+            if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
             setStep('done');
             queryClient.invalidateQueries({ queryKey: ['server', serverId] });
           } else if (status?.status === 'error' || status?.status === 'needs_cli') {
-            clearInterval(pollInterval);
+            if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
             setErrorMessage(status?.message || 'Download fehlgeschlagen');
             setStep('error');
           }

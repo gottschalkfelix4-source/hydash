@@ -2,15 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --hydash-primary: #5c7cfa;
-  --hydash-primary-dark: #4263eb;
-  --hydash-success: #51cf66;
-  --hydash-warning: #fcc419;
-  --hydash-danger: #ff6b6b;
-  --hydash-info: #22b8cf;
-}
-
 body {
   @apply bg-gray-900 text-gray-100 font-sans;
   -webkit-font-smoothing: antialiased;

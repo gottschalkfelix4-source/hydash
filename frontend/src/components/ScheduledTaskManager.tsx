@@ -1,33 +1,16 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { taskApi } from '../services/api';
+import { taskApi } from '@/services/api';
 import { Plus, Play, Trash2, ToggleLeft, ToggleRight, Clock, Loader2 } from 'lucide-react';
+import type { ScheduledTask } from '@/types';
+import { TASK_TYPES } from '@/types';
+import ConfirmModal from '@/components/ConfirmModal';
 
 interface TasksManagerProps {
   serverId: string;
 }
 
-interface Task {
-  id: string;
-  serverId: string;
-  name: string;
-  taskType: string;
-  cronExpression: string | null;
-  command: string | null;
-  enabled: boolean;
-  lastRunAt: string | null;
-  lastStatus: string | null;
-  nextRunAt: string | null;
-}
-
-const TASK_TYPES = [
-  { value: 'restart', label: 'Server Neustart' },
-  { value: 'backup', label: 'Backup erstellen' },
-  { value: 'command', label: 'Befehl ausführen' },
-  { value: 'start', label: 'Server starten' },
-  { value: 'stop', label: 'Server stoppen' },
-  { value: 'mod_update', label: 'Mod aktualisieren' },
-];
+type Task = ScheduledTask;
 
 const CRON_PRESETS = [
   { label: 'Jede Stunde', value: '0 * * * *' },
@@ -41,6 +24,7 @@ const CRON_PRESETS = [
 export default function ScheduledTaskManager({ serverId }: TasksManagerProps) {
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
+  const [confirmState, setConfirmState] = useState<{open: boolean, onConfirm: () => void, title: string, message: string} | null>(null);
   const [newTask, setNewTask] = useState({
     name: '',
     taskType: 'restart',
@@ -205,7 +189,7 @@ export default function ScheduledTaskManager({ serverId }: TasksManagerProps) {
                   <Play className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => { if (confirm('Aufgabe wirklich löschen?')) deleteMutation.mutate(task.id); }}
+                  onClick={() => { setConfirmState({open: true, onConfirm: () => deleteMutation.mutate(task.id), title: 'Aufgabe löschen', message: 'Aufgabe wirklich löschen?'}); }}
                   disabled={deleteMutation.isPending}
                   className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors disabled:opacity-50"
                   title="Löschen"
@@ -309,6 +293,15 @@ export default function ScheduledTaskManager({ serverId }: TasksManagerProps) {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        open={!!confirmState}
+        onConfirm={() => { confirmState?.onConfirm(); setConfirmState(null); }}
+        onCancel={() => setConfirmState(null)}
+        title={confirmState?.title || ''}
+        message={confirmState?.message || ''}
+        confirmVariant="danger"
+      />
     </div>
   );
 }

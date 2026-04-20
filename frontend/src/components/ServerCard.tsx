@@ -1,16 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Play, Square, RotateCw, Cpu, MemoryStick, Users, Trash2 } from 'lucide-react';
-import StatusBadge from './StatusBadge';
-
-interface Server {
-  id: string;
-  name: string;
-  port: number;
-  memoryLimitMb: number;
-  viewDistance: number;
-  status: string;
-  tags: string[];
-}
+import StatusBadge from '@/components/StatusBadge';
+import type { Server } from '@/types';
 
 interface ServerCardProps {
   server: Server;

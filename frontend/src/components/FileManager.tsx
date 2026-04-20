@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fileApi } from '../services/api';
+import { fileApi } from '@/services/api';
 import { Folder, File, ArrowLeft, RefreshCw, Trash2, Download, Upload } from 'lucide-react';
+import ConfirmModal from '@/components/ConfirmModal';
 
 interface FilesProps {
   serverId: string;
@@ -19,6 +20,7 @@ export default function FileManager({ serverId }: FilesProps) {
   const [editingFile, setEditingFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState('');
   const [_uploadingFile, setUploadingFile] = useState<File | null>(null);
+  const [confirmState, setConfirmState] = useState<{open: boolean, onConfirm: () => void, title: string, message: string} | null>(null);
   const queryClient = useQueryClient();
 
   const { data: filesData, isLoading, error } = useQuery({
@@ -63,6 +65,10 @@ export default function FileManager({ serverId }: FilesProps) {
   });
 
   const files: FileEntry[] = filesData || [];
+  const sortedFiles = useMemo(() => [...files].sort((a, b) => {
+    if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  }), [files]);
 
   const navigateTo = (name: string) => {
     const newPath = currentPath ? `${currentPath}/${name}` : name;
@@ -180,10 +186,7 @@ export default function FileManager({ serverId }: FilesProps) {
               <span className="text-gray-400 text-sm">..</span>
             </button>
           )}
-          {files.sort((a, b) => {
-            if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
-            return a.name.localeCompare(b.name);
-          }).map((file) => (
+          {sortedFiles.map((file) => (
             <div key={file.name} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-700/50 transition-colors">
               <button
                 onClick={() => file.type === 'directory' ? navigateTo(file.name) : readMutation.mutate(currentPath ? `${currentPath}/${file.name}` : file.name)}
@@ -208,7 +211,7 @@ export default function FileManager({ serverId }: FilesProps) {
                   </button>
                 )}
                 <button
-                  onClick={() => { if (confirm(`"${file.name}" wirklich löschen?`)) deleteMutation.mutate(currentPath ? `${currentPath}/${file.name}` : file.name); }}
+                  onClick={() => { setConfirmState({open: true, onConfirm: () => deleteMutation.mutate(currentPath ? `${currentPath}/${file.name}` : file.name), title: 'Datei löschen', message: `"${file.name}" wirklich löschen?`}); }}
                   className="p-1 text-red-400 hover:bg-red-500/10 rounded transition-colors"
                   title="Löschen"
                 >
@@ -228,6 +231,15 @@ export default function FileManager({ serverId }: FilesProps) {
           Datei wird hochgeladen...
         </div>
       )}
+
+      <ConfirmModal
+        open={!!confirmState}
+        onConfirm={() => { confirmState?.onConfirm(); setConfirmState(null); }}
+        onCancel={() => setConfirmState(null)}
+        title={confirmState?.title || ''}
+        message={confirmState?.message || ''}
+        confirmVariant="danger"
+      />
     </div>
   );
 }

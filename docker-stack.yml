@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -89,6 +87,8 @@ services:
     configs:
       - source: nginx_conf
         target: /etc/nginx/nginx.conf
+    volumes:
+      - ./ssl:/etc/nginx/ssl:ro
     depends_on:
       - backend
       - frontend

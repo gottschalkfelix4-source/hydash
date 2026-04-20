@@ -15,6 +15,7 @@ interface AuthState {
   accessToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isCheckingAuth: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, displayName?: string) => Promise<void>;
   logout: () => void;
@@ -31,6 +32,7 @@ export const useAuthStore = create<AuthState>()(
       accessToken: null,
       isAuthenticated: false,
       isLoading: false,
+      isCheckingAuth: true,
 
       login: async (email: string, password: string) => {
         set({ isLoading: true });
@@ -81,14 +83,15 @@ export const useAuthStore = create<AuthState>()(
       checkAuth: async () => {
         const { accessToken } = get();
         if (!accessToken) {
-          set({ isAuthenticated: false, user: null });
+          set({ isAuthenticated: false, user: null, isCheckingAuth: false });
           return;
         }
         try {
           const response = await api.get('/auth/me');
-          set({ user: response.data.data, isAuthenticated: true });
+          set({ user: response.data.data, isAuthenticated: true, isCheckingAuth: false });
         } catch {
           get().logout();
+          set({ isCheckingAuth: false });
         }
       },
 

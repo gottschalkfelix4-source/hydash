@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { backupApi } from '../services/api';
 import { Plus, RotateCcw, Trash2, HardDrive, Clock } from 'lucide-react';
+import ConfirmModal from '@/components/ConfirmModal';
 
 interface BackupsProps {
   serverId: string;
@@ -10,6 +11,7 @@ interface BackupsProps {
 export default function BackupsManager({ serverId }: BackupsProps) {
   const [showCreate, setShowCreate] = useState(false);
   const [backupType, setBackupType] = useState<'full' | 'universe' | 'config'>('full');
+  const [confirmState, setConfirmState] = useState<{open: boolean, onConfirm: () => void, title: string, message: string} | null>(null);
   const queryClient = useQueryClient();
 
   const { data: backupsData, isLoading } = useQuery({
@@ -115,7 +117,7 @@ export default function BackupsManager({ serverId }: BackupsProps) {
               </div>
               <div className="flex items-center space-x-2 ml-3">
                 <button
-                  onClick={() => { if (confirm('Backup wirklich wiederherstellen? Der Server wird gestoppt.')) restoreMutation.mutate(backup.id); }}
+                  onClick={() => { setConfirmState({open: true, onConfirm: () => restoreMutation.mutate(backup.id), title: 'Backup wiederherstellen', message: 'Backup wirklich wiederherstellen? Der Server wird gestoppt.'}); }}
                   disabled={restoreMutation.isPending}
                   className="p-1.5 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded transition-colors"
                   title="Wiederherstellen"
@@ -123,7 +125,7 @@ export default function BackupsManager({ serverId }: BackupsProps) {
                   <RotateCcw className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => { if (confirm('Backup wirklich löschen?')) deleteMutation.mutate(backup.id); }}
+                  onClick={() => { setConfirmState({open: true, onConfirm: () => deleteMutation.mutate(backup.id), title: 'Backup löschen', message: 'Backup wirklich löschen?'}); }}
                   disabled={deleteMutation.isPending}
                   className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
                   title="Löschen"
@@ -172,6 +174,15 @@ export default function BackupsManager({ serverId }: BackupsProps) {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        open={!!confirmState}
+        onConfirm={() => { confirmState?.onConfirm(); setConfirmState(null); }}
+        onCancel={() => setConfirmState(null)}
+        title={confirmState?.title || ''}
+        message={confirmState?.message || ''}
+        confirmVariant="danger"
+      />
     </div>
   );
 }

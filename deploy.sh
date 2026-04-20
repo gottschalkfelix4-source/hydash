@@ -42,7 +42,7 @@ case "$MODE" in
   logs)
     SERVICE=${2:-backend}
     echo -e "${YELLOW}Tailing logs for ${SERVICE}...${NC}"
-    if [ "$MODE" = "swarm" ]; then
+    if docker info --format '{{.Swarm.LocalNodeState}}' 2>/dev/null | grep -q 'active'; then
       docker service logs -f hydash_${SERVICE}
     else
       docker compose logs -f ${SERVICE}

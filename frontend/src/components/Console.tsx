@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useAuthStore } from '../store/authStore';
+import { useAuthStore } from '@/store/authStore';
+
+let logIdCounter = 0;
 
 interface ConsoleLog {
+  id: number;
   level: string;
   message: string;
   timestamp: string;
@@ -16,26 +19,40 @@ export default function Console({ serverId, serverStatus }: ConsoleProps) {
   const [logs, setLogs] = useState<ConsoleLog[]>([]);
   const [command, setCommand] = useState('');
   const [connected, setConnected] = useState(false);
+  const [reconnectAttempt, setReconnectAttempt] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
+  const reconnectAttemptRef = useRef(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { accessToken } = useAuthStore();
 
-  useEffect(() => {
+  const connectWebSocket = useCallback(() => {
     if (serverStatus !== 'running') return;
 
-    const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/console?token=${accessToken}&serverId=${serverId}`;
+    const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/console?serverId=${serverId}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
-    ws.onopen = () => setConnected(true);
-    ws.onclose = () => setConnected(false);
-    ws.onerror = () => setConnected(false);
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: 'auth', token: accessToken }));
+    };
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        if (data.type === 'auth_ok') {
+          setConnected(true);
+          reconnectAttemptRef.current = 0;
+          setReconnectAttempt(0);
+          return;
+        }
+        if (data.type === 'auth_error') {
+          setConnected(false);
+          return;
+        }
         if (data.type === 'log' || data.type === 'status') {
           setLogs(prev => [...prev.slice(-499), {
+            id: ++logIdCounter,
             level: data.level || 'INFO',
             message: data.data || data.message || '',
             timestamp: data.timestamp || new Date().toISOString(),
@@ -43,6 +60,7 @@ export default function Console({ serverId, serverStatus }: ConsoleProps) {
         }
       } catch {
         setLogs(prev => [...prev.slice(-499), {
+          id: ++logIdCounter,
           level: 'INFO',
           message: event.data,
           timestamp: new Date().toISOString(),
@@ -50,11 +68,35 @@ export default function Console({ serverId, serverStatus }: ConsoleProps) {
       }
     };
 
-    return () => {
-      ws.close();
-      wsRef.current = null;
+    ws.onclose = () => {
+      setConnected(false);
+      const delay = Math.min(1000 * Math.pow(2, reconnectAttemptRef.current), 30000);
+      reconnectAttemptRef.current += 1;
+      setReconnectAttempt(reconnectAttemptRef.current);
+      reconnectTimerRef.current = setTimeout(connectWebSocket, delay);
+    };
+
+    ws.onerror = () => {
+      setConnected(false);
     };
   }, [serverId, serverStatus, accessToken]);
+
+  useEffect(() => {
+    if (serverStatus !== 'running') return;
+
+    connectWebSocket();
+
+    return () => {
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+      reconnectAttemptRef.current = 0;
+      setReconnectAttempt(0);
+      wsRef.current?.close();
+      wsRef.current = null;
+    };
+  }, [serverId, serverStatus, accessToken, connectWebSocket]);
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -65,7 +107,7 @@ export default function Console({ serverId, serverStatus }: ConsoleProps) {
     if (!cmd || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
     wsRef.current.send(JSON.stringify({ type: 'command', command: cmd }));
-    setLogs(prev => [...prev, { level: 'INPUT', message: `> ${cmd}`, timestamp: new Date().toISOString() }]);
+    setLogs(prev => [...prev, { id: ++logIdCounter, level: 'INPUT', message: `> ${cmd}`, timestamp: new Date().toISOString() }]);
     setCommand('');
   }, [command]);
 
@@ -99,7 +141,9 @@ export default function Console({ serverId, serverStatus }: ConsoleProps) {
         <h3 className="text-lg font-semibold text-white">Konsole</h3>
         <div className="flex items-center space-x-2">
           <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
-          <span className="text-sm text-gray-400">{connected ? 'Verbunden' : 'Getrennt'}</span>
+          <span className="text-sm text-gray-400">
+            {connected ? 'Verbunden' : reconnectAttempt > 0 ? `Verbindung... (${reconnectAttempt})` : 'Getrennt'}
+          </span>
         </div>
       </div>
 
@@ -107,8 +151,8 @@ export default function Console({ serverId, serverStatus }: ConsoleProps) {
         {logs.length === 0 ? (
           <p className="text-gray-500">Warte auf Server-Ausgabe...</p>
         ) : (
-          logs.map((log, i) => (
-            <div key={i} className={`${getLevelColor(log.level)} whitespace-pre-wrap`}>
+          logs.map((log) => (
+            <div key={log.id} className={`${getLevelColor(log.level)} whitespace-pre-wrap`}>
               <span className="text-gray-600 mr-2">{new Date(log.timestamp).toLocaleTimeString('de-DE')}</span>
               {log.message}
             </div>

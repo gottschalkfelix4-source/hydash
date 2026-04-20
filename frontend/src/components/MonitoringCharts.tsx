@@ -203,7 +203,7 @@ export default function MonitoringCharts({ serverId }: MonitoringProps) {
         ) : (
           <div className="bg-gray-950 rounded-lg border border-gray-700 p-4 h-[500px] overflow-y-auto font-mono text-sm">
             {logs.map((log, i) => (
-              <div key={i} className={`${getLevelColor(log.level)} whitespace-pre-wrap`}>
+              <div key={`${log.timestamp}-${i}`} className={`${getLevelColor(log.level)} whitespace-pre-wrap`}>
                 <span className="text-gray-600 mr-2">
                   {new Date(log.timestamp).toLocaleTimeString('de-DE')}
                 </span>

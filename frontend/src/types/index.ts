@@ -89,6 +89,15 @@ export interface HealthIssue {
 export type TaskType = 'restart' | 'backup' | 'command' | 'mod_update' | 'start' | 'stop';
 export type TaskStatus = 'pending' | 'running' | 'success' | 'failed';
 
+export const TASK_TYPES: { value: TaskType; label: string }[] = [
+  { value: 'restart', label: 'Server Neustart' },
+  { value: 'backup', label: 'Backup erstellen' },
+  { value: 'command', label: 'Befehl ausführen' },
+  { value: 'start', label: 'Server starten' },
+  { value: 'stop', label: 'Server stoppen' },
+  { value: 'mod_update', label: 'Mod aktualisieren' },
+];
+
 export interface ScheduledTask {
   id: string;
   serverId: string;
@@ -171,10 +180,13 @@ export interface CurseForgeMod {
   summary: string;
   downloadCount: number;
   isFeatured: boolean;
-  logo?: { url: string; thumbnailUrl: string };
+  categories?: { name: string; iconUrl?: string; slug?: string }[];
+  authors?: { name: string; url?: string }[];
+  logo?: { url: string; thumbnailUrl: string; title?: string };
   latestFiles?: CurseForgeFile[];
   dateCreated: string;
   dateModified: string;
+  dateReleased?: string;
 }
 
 export interface CurseForgeFile {
@@ -185,6 +197,7 @@ export interface CurseForgeFile {
   releaseType: number;
   fileDate: string;
   fileLength: number;
+  downloadCount: number;
   downloadUrl: string;
   gameVersions: string[];
   dependencies: { modId: number; relationType: number }[];

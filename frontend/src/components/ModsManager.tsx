@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { modApi } from '../services/api';
+import { modApi } from '@/services/api';
+import type { CurseForgeMod, CurseForgeFile } from '@/types';
 import {
   Search, Download, Trash2, RefreshCw, Package, Loader2,
   ArrowLeft, Check, ExternalLink, Tag, User, Calendar
@@ -8,35 +9,6 @@ import {
 
 interface ModProps {
   serverId: string;
-}
-
-interface CurseForgeMod {
-  id: number;
-  name: string;
-  slug: string;
-  summary: string;
-  downloadCount: number;
-  isFeatured?: boolean;
-  categories?: { name: string; iconUrl?: string; slug?: string }[];
-  authors?: { name: string; url?: string }[];
-  logo?: { thumbnailUrl?: string; title?: string; url?: string };
-  dateModified?: string;
-  dateCreated?: string;
-  dateReleased?: string;
-  latestFiles?: CurseForgeFile[];
-}
-
-interface CurseForgeFile {
-  id: number;
-  modId: number;
-  displayName: string;
-  fileName: string;
-  releaseType: number;
-  fileDate: string;
-  fileLength: number;
-  downloadCount: number;
-  downloadUrl: string;
-  gameVersions: string[];
 }
 
 type InstallState = 'idle' | 'downloading' | 'installing' | 'success' | 'error';
@@ -91,11 +63,7 @@ export default function ModsManager({ serverId }: ModProps) {
       setInstallStates(prev => ({ ...prev, [data.curseforgeId]: 'downloading' }));
       try {
         const result = await modApi.install(serverId, data);
-        setInstallStates(prev => ({ ...prev, [data.curseforgeId]: 'installing' }));
-        // Small delay to show "installing" state
-        await new Promise(r => setTimeout(r, 800));
         setInstallStates(prev => ({ ...prev, [data.curseforgeId]: 'success' }));
-        // Reset success state after 3 seconds
         setTimeout(() => {
           setInstallStates(prev => ({ ...prev, [data.curseforgeId]: 'idle' }));
         }, 3000);
